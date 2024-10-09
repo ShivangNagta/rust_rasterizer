@@ -14,7 +14,7 @@ fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
 
-    let window = video_subsystem.window("game tutorial", 800, 600)
+    let window = video_subsystem.window("Rust Rasterizer", 800, 600)
         .position_centered()
         .build()
         .expect("could not initialize video subsystem");

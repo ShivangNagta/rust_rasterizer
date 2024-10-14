@@ -122,10 +122,7 @@ fn draw_horizontal_line(canvas: &mut WindowCanvas, y: i32, start_x: i32, end_x: 
     let left_x = start_x.min(end_x);
     let right_x = start_x.max(end_x);
 
-    // Adjust right boundary to stay within the grid box
-    let right_boundary = (right_x / grid_size) * grid_size; 
-
-    for x in (left_x..=right_boundary).step_by(grid_size as usize) {
+    for x in (left_x..=right_x).step_by(grid_size as usize) {
         let t = if right_x != left_x {
             (x - left_x) as f32 / (right_x - left_x) as f32
         } else {

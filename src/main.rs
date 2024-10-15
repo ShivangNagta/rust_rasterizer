@@ -214,6 +214,20 @@ fn draw_shadow(canvas: &mut WindowCanvas, vertices: &[Vertex], width: u32, heigh
     fill_triangle(canvas, &shadow_vertices[0], &shadow_vertices[1], &shadow_vertices[2], width, height, resolution);
 }
 
+fn draw_grid(canvas: &mut WindowCanvas, width: u32, height: u32, resolution: i32) {
+    canvas.set_draw_color(Color::RGB(50, 50, 50)); // Dark gray color for the grid
+
+    // Draw vertical lines
+    for x in (0..width as i32).step_by(resolution as usize) {
+        canvas.draw_line((x, 0), (x, height as i32)).unwrap();
+    }
+
+    // Draw horizontal lines
+    for y in (0..height as i32).step_by(resolution as usize) {
+        canvas.draw_line((0, y), (width as i32, y)).unwrap();
+    }
+}
+
 fn main() -> Result<(), String> {
     let width = 800;
     let height = 600;
@@ -221,7 +235,7 @@ fn main() -> Result<(), String> {
     let video_subsystem = sdl_context.video()?;
 
     let window = video_subsystem
-        .window("Rust Rasterizer with Color Interpolation, Resolution Control, and Shadow", width, height)
+        .window("Rust Rasterizer with Grid Lines", width, height)
         .position_centered()
         .build()
         .expect("Could not initialize video subsystem");
@@ -239,12 +253,15 @@ fn main() -> Result<(), String> {
     let vertices = [
         Vertex { position: Point3D { x: 0.0, y: 1.0, z: 0.0 }, color: Color::RGB(255, 0, 0) },
         Vertex { position: Point3D { x: -1.2, y: -1.0, z: 0.5 }, color: Color::RGB(0, 255, 0) },
-        Vertex { position: Point3D { x: 1.0, y: -1., z: -0.5 }, color: Color::RGB(0, 0, 255) },
+        Vertex { position: Point3D { x: 1.0, y: -1.4, z: -0.5 }, color: Color::RGB(0, 0, 255) },
     ];
 
     'running: loop {
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
+
+        // Draw grid
+        draw_grid(&mut canvas, width, height, resolution);
 
         // Draw shadow
         draw_shadow(&mut canvas, &vertices, width, height, resolution, rotation_angle);

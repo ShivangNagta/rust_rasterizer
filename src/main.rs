@@ -89,9 +89,6 @@ impl InterpolatedPoints {
             (*min_point, *max_point)
         })
     }
-    fn get_key_by_index(&self, index: usize) -> Option<&i32> {
-        self.points.keys().nth(index)
-    }
 }
 
 
@@ -188,7 +185,7 @@ fn draw_horizontal_line(canvas: &mut WindowCanvas, x1: i32, y1: i32, x2: i32, y2
 
     loop {
         
-        let t = ((x - x1).pow(2) + (y - y1).pow(2)) as f32 / total_distance;
+        let t = if total_distance == 0.0 {0.0} else {((x - x1).pow(2) + (y - y1).pow(2)) as f32 / total_distance};
         let color = interpolate_color(c1, c2, t);
         
         
@@ -230,7 +227,6 @@ fn fill_triangle(
 
     for y in (min_y..=max_y).step_by(resolution as usize) {
         if let Some(((x_min, color_min), (x_max, color_max))) = interpolated_points.get_min_max_x(y) {
-            print!("{} ", y);
             
             draw_horizontal_line(canvas, x_min, y, x_max, y , color_min, color_max, 0, 0, resolution);
 

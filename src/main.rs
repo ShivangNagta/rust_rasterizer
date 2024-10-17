@@ -1,14 +1,13 @@
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
-use sdl2::rect::{Point, Rect};
+use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
 use std::time::{Duration, Instant};
 use std::f32::consts::PI;
-use std::cmp;
 use std::collections::HashMap;
 
-
+// Custom UI : A slider for giving dynamic changes
 struct Slider {
     x: i32,
     y: i32,
@@ -19,7 +18,6 @@ struct Slider {
     max_value: f32,
     dragging: bool,
 }
-
 impl Slider {
     fn new(x: i32, y: i32, width: i32, height: i32,value: f32, min_value: f32, max_value: f32) -> Self {
         Slider {
@@ -67,21 +65,20 @@ impl Slider {
     }
 }
 
+// Custom UI : A structure to store interpolated points from Bresenham's line algorithm
+// Hashmap : { y: [(x, color)] }
 struct InterpolatedPoints {
     points: HashMap<i32, Vec<(i32, Color)>>,
 }
-
 impl InterpolatedPoints {
     fn new() -> Self {
         Self { points: HashMap::new() }
     }
 
-    // Add a point (x, y) with a specific color to the structure
     fn add_point(&mut self, x: i32, y: i32, color: Color) {
         self.points.entry(y).or_insert_with(Vec::new).push((x, color));
     }
 
-    // Get the min and max x values and their colors for a specific y (used to fill between edges)
     fn get_min_max_x(&self, y: i32) -> Option<((i32, Color), (i32, Color))> {
         self.points.get(&y).map(|xs| {
             let min_point = xs.iter().min_by_key(|(x, _)| x).unwrap();
@@ -92,41 +89,50 @@ impl InterpolatedPoints {
 }
 
 
+// A background grid to help visualize the 2d space
 fn draw_grid(canvas: &mut WindowCanvas, width: u32, height: u32, resolution: i32) {
-    canvas.set_draw_color(Color::RGB(50, 50, 50)); // Dark gray color for the grid
-
-    // Draw vertical lines
+    canvas.set_draw_color(Color::RGB(50, 50, 50));
     for x in (0..width as i32).step_by(resolution as usize) {
         canvas.draw_line((x, 0), (x, height as i32)).unwrap();
     }
-
-    // Draw horizontal lines
     for y in (0..height as i32).step_by(resolution as usize) {
         canvas.draw_line((0, y), (width as i32, y)).unwrap();
     }
 }
 
+// Position struct
 struct Vertex {
     x: i32,
     y: i32,
     z: i32,
 }
-
+// Position and color struct
 struct Point3D {
     vertex: Vertex,
     color: Color,
 }
 
+// 2d rotation about y-axis
+fn rotate_y(point: &Vertex, angle: f32) -> Vertex {
+    let cos_a = angle.cos();
+    let sin_a = angle.sin();
+    Vertex {
+        x: (point.x as f32 * cos_a + point.z as f32 * sin_a) as i32,
+        y: point.y,
+        z: (-point.x as f32 * sin_a + point.z as f32 * cos_a) as i32,
+    }
+}
 
+// Simple Linear Interpolation for color
 fn interpolate_color(c1: Color, c2: Color , t: f32) -> Color {
     let r = (c1.r as f32 * (1.0 - t) + c2.r as f32 * t) as u8;
     let g = (c1.g as f32 * (1.0 - t) + c2.g as f32 * t) as u8;
     let b = (c1.b as f32 * (1.0 - t) + c2.b as f32 * t) as u8;
     Color::RGB(r, g, b)
-
 }
 
-fn draw_interpolated_line(interpolated_points: &mut InterpolatedPoints, canvas: &mut WindowCanvas, x1: i32, y1: i32, x2: i32, y2: i32, c1: Color, c2: Color, z1: i32, z2: i32, resolution: i32 ) {
+// Drawing a line using Bresenham's line algorithm and interpolating colors based on the two vertices
+fn draw_bresenham_line(interpolated_points: &mut InterpolatedPoints, canvas: &mut WindowCanvas, x1: i32, y1: i32, x2: i32, y2: i32, c1: Color, c2: Color, _z1: i32, _z2: i32, resolution: i32 ) {
     
     
     let dx = (x2 - x1).abs();
@@ -152,7 +158,7 @@ fn draw_interpolated_line(interpolated_points: &mut InterpolatedPoints, canvas: 
         canvas.set_draw_color(color);
         canvas.fill_rect(Rect::new(x - x % resolution, y - y % resolution, resolution as u32, resolution as u32)).unwrap();
 
-        // Break when reaching the target (or when you're close enough, adjust to ensure rounding)
+
         if (x - x2).abs() < resolution && (y - y2).abs() < resolution {
             break;
         }
@@ -169,7 +175,9 @@ fn draw_interpolated_line(interpolated_points: &mut InterpolatedPoints, canvas: 
     }
 }
 
-fn draw_horizontal_line(canvas: &mut WindowCanvas, x1: i32, y1: i32, x2: i32, y2: i32, c1: Color, c2: Color, z1: i32, z2: i32, resolution: i32 ) {
+// Drawing a horizontal line using Bresenham's line algorithm and interpolating colors based on the two vertices
+// It does not store the points in the hashmap, as it is only for filling the triangle
+fn draw_horizontal_line(canvas: &mut WindowCanvas, x1: i32, y1: i32, x2: i32, y2: i32, c1: Color, c2: Color, _z1: i32, _z2: i32, resolution: i32 ) {
     
     
     let dx = (x2 - x1).abs();
@@ -195,7 +203,7 @@ fn draw_horizontal_line(canvas: &mut WindowCanvas, x1: i32, y1: i32, x2: i32, y2
         canvas.set_draw_color(color);
         canvas.fill_rect(Rect::new(x - x % resolution, y - y % resolution, resolution as u32, resolution as u32)).unwrap();
 
-        // Break when reaching the target (or when you're close enough, adjust to ensure rounding)
+        
         if (x - x2).abs() < resolution && (y - y2).abs() < resolution {
             break;
         }
@@ -212,6 +220,7 @@ fn draw_horizontal_line(canvas: &mut WindowCanvas, x1: i32, y1: i32, x2: i32, y2
     }
 }
 
+// Filling the triangle using the interpolated points
 fn fill_triangle(
     canvas: &mut WindowCanvas,
     v0: &Point3D,
@@ -226,15 +235,14 @@ fn fill_triangle(
     max_y -= max_y % resolution;
 
     for y in (min_y..=max_y).step_by(resolution as usize) {
-        if let Some(((x_min, color_min), (x_max, color_max))) = interpolated_points.get_min_max_x(y) {
-            
+        if let Some(((x_min, color_min), (x_max, color_max))) = interpolated_points.get_min_max_x(y) {          
             draw_horizontal_line(canvas, x_min, y, x_max, y , color_min, color_max, 0, 0, resolution);
-
         } else {
-            // eprintln!("Warning: No min/max x found for y = {}", y);
+            eprintln!("Warning: No min/max x found for y = {}", y);
         }
     }
 }
+
 
 fn main() -> Result<(), String> {
     let width = 800;
@@ -255,49 +263,65 @@ fn main() -> Result<(), String> {
 
     let mut event_pump = sdl_context.event_pump()?;
     let mut resolution_slider = Slider::new(50, 100, 200, 10, 25.0, 1.0, 50.0);
+    let mut rotation_slider = Slider::new(50, 50, 200, 10,0.0,  0.0, 2.0 * PI);
+    let mut rotation_angle: f32 = rotation_slider.value;
     let mut resolution: i32 = resolution_slider.value as i32;
 
-    // Initialize FPS tracking
+    //FPS tracking
     let mut last_time = Instant::now();
     let mut frame_count = 0;
 
-    let vertices = [ { Point3D {
-        vertex: Vertex { x: 600, y: 50, z: 0 },
-        color: Color::RGB(255, 0, 0),
-    } }, { Point3D {
-        vertex: Vertex { x: 50, y: 400, z: 0 },
-        color: Color::RGB(0, 255, 0),
-    } }, { Point3D {
-        vertex: Vertex { x: 400, y: 500, z: 0 },
-        color: Color::RGB(0, 0, 255),
-    }} ];
+    let original_vertices = vec![
+        Point3D {
+            vertex: Vertex { x: 0, y: -250, z: 0 },
+            color: Color::RGB(255, 0, 0),
+        },
+        Point3D {
+            vertex: Vertex { x: -300, y: 100, z: 0 },
+            color: Color::RGB(0, 255, 0),
+        },
+        Point3D {
+            vertex: Vertex { x: 350, y: 200, z: 0 },
+            color: Color::RGB(0, 0, 255),
+        }
+    ];
 
     let mut interpolated_points = InterpolatedPoints::new();
-
-    // let triangle_height: i32 = cmp::max(cmp::max(vertices[0].vertex.y, vertices[1].vertex.y), vertices[2].vertex.y)  
-    //                 - cmp::min(cmp::min(vertices[0].vertex.y, vertices[1].vertex.y), vertices[2].vertex.y);
+    let center_x = width as i32 / 2;
+    let center_y = height as i32 / 2;
 
     'running: loop {
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
-
-        // Draw grid and lines
         draw_grid(&mut canvas, width, height, resolution);
 
+        let rotated_vertices: Vec<Point3D> = original_vertices.iter().map(|v| {
+            let rotated = rotate_y(&v.vertex, rotation_angle);
+            Point3D {
+                vertex: Vertex {
+                    x: rotated.x + center_x,
+                    y: rotated.y + center_y,
+                    z: rotated.z,
+                },
+                color: v.color,
+            }
+        }).collect();
+
         for i in 0..3 {
-            let point1 = &vertices[i];
-            let point2 = &vertices[(i + 1) % 3];
-            draw_interpolated_line(&mut interpolated_points, &mut canvas, 
-                 point1.vertex.x as i32,
-                 point1.vertex.y as i32,
-                 point2.vertex.x as i32,
-                 point2.vertex.y as i32, 
+            let point1 = &rotated_vertices[i];
+            let point2 = &rotated_vertices[(i + 1) % 3];
+            draw_bresenham_line(&mut interpolated_points, &mut canvas, 
+                 point1.vertex.x,
+                 point1.vertex.y,
+                 point2.vertex.x,
+                 point2.vertex.y, 
                  point1.color, point2.color, point1.vertex.z, point2.vertex.z, resolution);
         }
 
-        fill_triangle(&mut canvas, &vertices[0], &vertices[1], &vertices[2], resolution, &mut interpolated_points);
+        fill_triangle(&mut canvas, &rotated_vertices[0], &rotated_vertices[1], &rotated_vertices[2], resolution, &mut interpolated_points);
 
         resolution_slider.render(&mut canvas);
+        rotation_slider.render(&mut canvas);
 
         // Measure frame time and calculate FPS
         frame_count += 1;
@@ -305,12 +329,12 @@ fn main() -> Result<(), String> {
         let duration = now.duration_since(last_time);
         if duration.as_secs_f32() >= 1.0 {
             let fps = frame_count as f32 / duration.as_secs_f32();
-            println!("FPS: {:.2}", fps);  // You can display this value on the screen using text rendering instead of printing
+            println!("FPS: {:.2}", fps);
             frame_count = 0;
             last_time = now;
         }
 
-        // Handle events
+        // Event Handling
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. } | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
@@ -318,6 +342,7 @@ fn main() -> Result<(), String> {
                 }
                 _ => {
                     resolution_slider.handle_event(&event);
+                    rotation_slider.handle_event(&event);
                     interpolated_points = InterpolatedPoints::new();
                     
                 }
@@ -325,10 +350,11 @@ fn main() -> Result<(), String> {
         }
 
         resolution = resolution_slider.value as i32;
+        rotation_angle = rotation_slider.value;
         canvas.present();
 
         // Limit to ~60 FPS
-        // ::std::thread::sleep(Duration::from_millis(16));
+        ::std::thread::sleep(Duration::from_millis(16));
     }
 
     Ok(())

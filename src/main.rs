@@ -5,6 +5,8 @@ use sdl2::rect::{Point, Rect};
 use sdl2::render::WindowCanvas;
 use std::time::{Duration, Instant};
 use std::f32::consts::PI;
+use std::cmp;
+use std::collections::HashMap;
 
 
 struct Slider {
@@ -65,6 +67,34 @@ impl Slider {
     }
 }
 
+struct InterpolatedPoints {
+    points: HashMap<i32, Vec<(i32, Color)>>,
+}
+
+impl InterpolatedPoints {
+    fn new() -> Self {
+        Self { points: HashMap::new() }
+    }
+
+    // Add a point (x, y) with a specific color to the structure
+    fn add_point(&mut self, x: i32, y: i32, color: Color) {
+        self.points.entry(y).or_insert_with(Vec::new).push((x, color));
+    }
+
+    // Get the min and max x values and their colors for a specific y (used to fill between edges)
+    fn get_min_max_x(&self, y: i32) -> Option<((i32, Color), (i32, Color))> {
+        self.points.get(&y).map(|xs| {
+            let min_point = xs.iter().min_by_key(|(x, _)| x).unwrap();
+            let max_point = xs.iter().max_by_key(|(x, _)| x).unwrap();
+            (*min_point, *max_point)
+        })
+    }
+    fn get_key_by_index(&self, index: usize) -> Option<&i32> {
+        self.points.keys().nth(index)
+    }
+}
+
+
 fn draw_grid(canvas: &mut WindowCanvas, width: u32, height: u32, resolution: i32) {
     canvas.set_draw_color(Color::RGB(50, 50, 50)); // Dark gray color for the grid
 
@@ -80,9 +110,9 @@ fn draw_grid(canvas: &mut WindowCanvas, width: u32, height: u32, resolution: i32
 }
 
 struct Vertex {
-    x: f32,
-    y: f32,
-    z: f32,
+    x: i32,
+    y: i32,
+    z: i32,
 }
 
 struct Point3D {
@@ -99,7 +129,9 @@ fn interpolate_color(c1: Color, c2: Color , t: f32) -> Color {
 
 }
 
-fn draw_interpolated_line(canvas: &mut WindowCanvas, x1: i32, y1: i32, x2: i32, y2: i32, c1: Color, c2: Color, z1: f32, z2: f32, resolution: i32) {
+fn draw_interpolated_line(interpolated_points: &mut InterpolatedPoints, canvas: &mut WindowCanvas, x1: i32, y1: i32, x2: i32, y2: i32, c1: Color, c2: Color, z1: i32, z2: i32, resolution: i32 ) {
+    
+    
     let dx = (x2 - x1).abs();
     let dy = (y2 - y1).abs();
     let sx = if x1 < x2 { resolution } else { -resolution };
@@ -112,8 +144,11 @@ fn draw_interpolated_line(canvas: &mut WindowCanvas, x1: i32, y1: i32, x2: i32, 
     let total_distance = ((x2 - x1).pow(2) + (y2 - y1).pow(2)) as f32;
 
     loop {
+        
         let t = ((x - x1).pow(2) + (y - y1).pow(2)) as f32 / total_distance;
         let color = interpolate_color(c1, c2, t);
+        interpolated_points.add_point(x - x % resolution, y - y % resolution, color);
+        
         // let z = z1 * (1.0 - t) + z2 * t;
         // let shadow_factor = (1.0 + z).max(0.0).min(1.0);
         // let shadowed_color = darken_color(color, shadow_factor);
@@ -137,6 +172,74 @@ fn draw_interpolated_line(canvas: &mut WindowCanvas, x1: i32, y1: i32, x2: i32, 
     }
 }
 
+fn draw_horizontal_line(canvas: &mut WindowCanvas, x1: i32, y1: i32, x2: i32, y2: i32, c1: Color, c2: Color, z1: i32, z2: i32, resolution: i32 ) {
+    
+    
+    let dx = (x2 - x1).abs();
+    let dy = (y2 - y1).abs();
+    let sx = if x1 < x2 { 1 } else { -1 };
+    let sy = if y1 < y2 { 1 } else { -1 };
+    let mut err = dx - dy;
+
+    let mut x = x1;
+    let mut y = y1;
+
+    let total_distance = ((x2 - x1).pow(2) + (y2 - y1).pow(2)) as f32;
+
+    loop {
+        
+        let t = ((x - x1).pow(2) + (y - y1).pow(2)) as f32 / total_distance;
+        let color = interpolate_color(c1, c2, t);
+        
+        
+        // let z = z1 * (1.0 - t) + z2 * t;
+        // let shadow_factor = (1.0 + z).max(0.0).min(1.0);
+        // let shadowed_color = darken_color(color, shadow_factor);
+        canvas.set_draw_color(color);
+        canvas.fill_rect(Rect::new(x - x % resolution, y - y % resolution, resolution as u32, resolution as u32)).unwrap();
+
+        // Break when reaching the target (or when you're close enough, adjust to ensure rounding)
+        if (x - x2).abs() < resolution && (y - y2).abs() < resolution {
+            break;
+        }
+
+        let e2 = 2 * err;
+        if e2 > -dy {
+            err -= dy;
+            x += sx;
+        }
+        if e2 < dx {
+            err += dx;
+            y += sy;
+        }
+    }
+}
+
+fn fill_triangle(
+    canvas: &mut WindowCanvas,
+    v0: &Point3D,
+    v1: &Point3D,
+    v2: &Point3D,
+    resolution: i32,
+    interpolated_points: &mut InterpolatedPoints,
+) {
+    let mut min_y = v0.vertex.y.min(v1.vertex.y).min(v2.vertex.y);
+    let mut max_y = v0.vertex.y.max(v1.vertex.y).max(v2.vertex.y);
+    min_y -= min_y % resolution;
+    max_y -= max_y % resolution;
+
+    for y in (min_y..=max_y).step_by(resolution as usize) {
+        if let Some(((x_min, color_min), (x_max, color_max))) = interpolated_points.get_min_max_x(y) {
+            print!("{} ", y);
+            
+            draw_horizontal_line(canvas, x_min, y, x_max, y , color_min, color_max, 0, 0, resolution);
+
+        } else {
+            // eprintln!("Warning: No min/max x found for y = {}", y);
+        }
+    }
+}
+
 fn main() -> Result<(), String> {
     let width = 800;
     let height = 600;
@@ -150,6 +253,7 @@ fn main() -> Result<(), String> {
         .expect("Could not initialize video subsystem");
 
     let mut canvas = window.into_canvas()
+        .present_vsync()
         .build()
         .expect("Could not make a canvas");
 
@@ -162,15 +266,20 @@ fn main() -> Result<(), String> {
     let mut frame_count = 0;
 
     let vertices = [ { Point3D {
-        vertex: Vertex { x: 600.0, y: 50.0, z: 0.0 },
+        vertex: Vertex { x: 600, y: 50, z: 0 },
         color: Color::RGB(255, 0, 0),
     } }, { Point3D {
-        vertex: Vertex { x: 50.0, y: 400.0, z: 0.5 },
+        vertex: Vertex { x: 50, y: 400, z: 0 },
         color: Color::RGB(0, 255, 0),
     } }, { Point3D {
-        vertex: Vertex { x: 400.0, y: 500.0, z: -0.5 },
+        vertex: Vertex { x: 400, y: 500, z: 0 },
         color: Color::RGB(0, 0, 255),
     }} ];
+
+    let mut interpolated_points = InterpolatedPoints::new();
+
+    // let triangle_height: i32 = cmp::max(cmp::max(vertices[0].vertex.y, vertices[1].vertex.y), vertices[2].vertex.y)  
+    //                 - cmp::min(cmp::min(vertices[0].vertex.y, vertices[1].vertex.y), vertices[2].vertex.y);
 
     'running: loop {
         canvas.set_draw_color(Color::RGB(0, 0, 0));
@@ -182,13 +291,15 @@ fn main() -> Result<(), String> {
         for i in 0..3 {
             let point1 = &vertices[i];
             let point2 = &vertices[(i + 1) % 3];
-            draw_interpolated_line(&mut canvas, 
+            draw_interpolated_line(&mut interpolated_points, &mut canvas, 
                  point1.vertex.x as i32,
                  point1.vertex.y as i32,
                  point2.vertex.x as i32,
                  point2.vertex.y as i32, 
                  point1.color, point2.color, point1.vertex.z, point2.vertex.z, resolution);
         }
+
+        fill_triangle(&mut canvas, &vertices[0], &vertices[1], &vertices[2], resolution, &mut interpolated_points);
 
         resolution_slider.render(&mut canvas);
 
@@ -211,6 +322,8 @@ fn main() -> Result<(), String> {
                 }
                 _ => {
                     resolution_slider.handle_event(&event);
+                    interpolated_points = InterpolatedPoints::new();
+                    
                 }
             }
         }

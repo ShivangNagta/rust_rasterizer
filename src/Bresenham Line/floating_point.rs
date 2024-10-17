@@ -126,7 +126,7 @@ fn main() -> Result<(), String> {
         // Draw grid
         draw_grid(&mut canvas, width, height, resolution);
 
-        bresenham_line(50, 50, 400, 400, &mut canvas, resolution, width, height);
+        bresenham_line(50, 50, 600, 400, &mut canvas, resolution, width, height);
 
         
         // rotation_slider.render(&mut canvas);

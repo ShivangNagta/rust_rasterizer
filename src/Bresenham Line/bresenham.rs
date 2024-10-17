@@ -175,6 +175,7 @@ fn main() -> Result<(), String> {
     // Initialize FPS tracking
     let mut last_time = Instant::now();
     let mut frame_count = 0;
+    
 
     let point1 = Point3D {
         vertex: Vertex { x: 600.0, y: 50.0, z: 0.0 },

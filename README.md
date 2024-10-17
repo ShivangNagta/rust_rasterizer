@@ -5,7 +5,8 @@ One Slider is used for setting resolution for visulisation and the other one is 
 <img width="792" alt="Screenshot 2024-10-18 at 4 04 12 AM" src="https://github.com/user-attachments/assets/6a8edff1-7803-4471-96a5-0f3902f72598">
 
 
-Installation Guide \br
+Installation Guide :
+
 For Mac - 
 Install SDL2 ( I am using version 2.30.8). I prefer using Homebrew : 
 ```
